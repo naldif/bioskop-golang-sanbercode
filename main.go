@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -27,6 +28,7 @@ type APIResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 	Data    any    `json:"data"`
+	Error   string `json:"error,omitempty"`
 }
 
 var DB *gorm.DB
@@ -83,6 +85,144 @@ func createBioskop(c *gin.Context) {
 	})
 }
 
+// GET /bioskop (Get All)
+func getAllBioskop(c *gin.Context) {
+	var daftarBioskop []Bioskop
+
+	if err := DB.Find(&daftarBioskop).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Status:  "error",
+			Message: "Gagal mengambil daftar bioskop",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Status:  "success",
+		Message: "Daftar bioskop berhasil diambil",
+		Data:    daftarBioskop,
+	})
+}
+
+// GET /bioskop/:id (Get Detail by ID)
+func getBioskopByID(c *gin.Context) {
+	id := c.Param("id")
+	var bioskop Bioskop
+
+	if err := DB.First(&bioskop, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, APIResponse{
+				Status:  "error",
+				Message: fmt.Sprintf("Bioskop dengan ID %s tidak ditemukan", id),
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Status:  "error",
+			Message: "Terjadi kesalahan pada server",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Status:  "success",
+		Message: "Detail bioskop berhasil ditemukan",
+		Data:    bioskop,
+	})
+}
+
+// PUT /bioskop/:id (Update)
+func updateBioskop(c *gin.Context) {
+	id := c.Param("id")
+	var bioskop Bioskop
+
+	if err := DB.First(&bioskop, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, APIResponse{
+				Status:  "error",
+				Message: fmt.Sprintf("Bioskop dengan ID %s tidak ditemukan", id),
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Status:  "error",
+			Message: "Terjadi kesalahan pada server",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	var input CreateBioskopInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Status:  "error",
+			Message: "Validasi gagal: Nama dan Lokasi wajib diisi",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	bioskop.Nama = input.Nama
+	bioskop.Lokasi = input.Lokasi
+	bioskop.Rating = input.Rating
+
+	if err := DB.Save(&bioskop).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Status:  "error",
+			Message: "Gagal memperbarui data bioskop",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Status:  "success",
+		Message: "Data bioskop berhasil diperbarui",
+		Data:    bioskop,
+	})
+}
+
+// DELETE /bioskop/:id (Delete)
+func deleteBioskop(c *gin.Context) {
+	id := c.Param("id")
+	var bioskop Bioskop
+
+	if err := DB.First(&bioskop, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, APIResponse{
+				Status:  "error",
+				Message: fmt.Sprintf("Bioskop dengan ID %s tidak ditemukan", id),
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Status:  "error",
+			Message: "Terjadi kesalahan pada server",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	if err := DB.Delete(&bioskop).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Status:  "error",
+			Message: "Gagal menghapus data bioskop",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Status:  "success",
+		Message: fmt.Sprintf("Bioskop dengan ID %s berhasil dihapus", id),
+	})
+}
+
 func main() {
 
 	initDB()
@@ -90,6 +230,10 @@ func main() {
 	r := gin.Default()
 
 	r.POST("/bioskop", createBioskop)
+	r.GET("/bioskop", getAllBioskop)
+	r.GET("/bioskop/:id", getBioskopByID)
+	r.PUT("/bioskop/:id", updateBioskop)
+	r.DELETE("/bioskop/:id", deleteBioskop)	
 
 	if err := r.Run(":8081"); err != nil {
 		log.Fatalf("Gagal menjalankan server: %v", err)

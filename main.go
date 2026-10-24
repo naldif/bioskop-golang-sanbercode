@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"errors"
 	"fmt"
 	"log"
@@ -35,7 +36,11 @@ var DB *gorm.DB
 
 func initDB() {
 
-	dsn := "host=localhost user=postgres password=postgres dbname=bioskop port=5432 sslmode=disable TimeZone=Asia/Jakarta"
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = "host=localhost user=postgres password=postgres dbname=bioskop port=5432 sslmode=disable TimeZone=Asia/Jakarta"
+	}
+
 	var err error
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
